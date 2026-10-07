@@ -12,36 +12,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar arquivos do projeto
+      - name: Baixar arquivos
         uses: actions/checkout@v4
 
-      - name: Encontrar e extrair projeto
+      - name: Extrair projeto
         run: |
-          ZIP=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+          ZIP=$(find . -type f -name "*.zip" | head -n 1)
           mkdir projeto
           unzip -q "$ZIP" -d projeto
 
-      - name: Encontrar projeto Android
+      - name: Localizar projeto Android
         run: |
-          echo "Conteúdo extraído:"
-          find projeto -maxdepth 4 -type f | head -100
+          ROOT=$(find projeto -name "settings.gradle" -o -name "settings.gradle.kts" | head -n 1)
+          if [ -z "$ROOT" ]; then
+            echo "Projeto Android não encontrado"
+            find projeto -maxdepth 5 -type f
+            exit 1
+          fi
+          echo "Projeto encontrado em: $(dirname "$ROOT")"
+          echo "ANDROID_ROOT=$(dirname "$ROOT")" >> $GITHUB_ENV
 
-      - name: Configurar Java 17
+      - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
       - name: Compilar APK
         run: |
-          GRADLEW=$(find projeto -type f -name "gradlew" | head -n 1)
-          chmod +x "$GRADLEW"
-          cd "$(dirname "$GRADLEW")"
-          ./gradlew assembleDebug
+          cd "$ANDROID_ROOT"
+          gradle assembleDebug --stacktrace
 
       - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
         with:
           name: AssistenteFinanceiro-APK
           path: |
-            projeto/**/build/outputs/apk/**/*.apk
+            **/build/outputs/apk/**/*.apk
